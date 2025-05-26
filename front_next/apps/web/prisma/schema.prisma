@@ -1,0 +1,161 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// 사용자 모델
+model User {
+  id           String         @id @default(uuid()) @map("_id")
+  nickname     String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  profileImage String?
+  level        Int            @default(1)
+  streak       Int            @default(0)
+  
+  // 관계 정의
+  routines     Routine[]      // 사용자가 생성한 루틴
+  routineLogs  RoutineLog[]   // 사용자의 루틴 기록
+  likes        Like[]         // 사용자가 좋아요 한 항목
+  bookmarks    Bookmark[]     // 사용자가 북마크한 항목
+  comments     Comment[]      // 사용자가 작성한 댓글
+  userRoutines UserRoutine[]  // 사용자가 선택한 루틴과 설정한 듀레이션
+}
+
+model Routine {
+  id            String        @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String
+  title         String
+  desc          String
+  how           String
+  icon          String
+  color         String?
+  detailImg     String?
+  isRecommended Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  tag           String[]
+  category      String?
+  isActive      Boolean       @default(true)
+  
+  // 관계 정의
+  user          User          @relation(fields: [userId], references: [id])
+  logs          RoutineLog[]
+  userRoutines  UserRoutine[] // 이 루틴을 선택한 사용자들과 그들이 설정한 듀레이션
+
+  @@index([userId])
+  @@index([tag])
+}
+
+model UserRoutine {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String
+  routineId   String   @db.ObjectId
+  duration    Int      // 사용자가 이 루틴에 설정한 수행 시간(분 단위)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  isActive    Boolean  @default(true)
+
+  // 관계 정의
+  user        User     @relation(fields: [userId], references: [id])
+  routine     Routine  @relation(fields: [routineId], references: [id])
+
+  @@unique([userId, routineId])
+  @@index([userId])
+  @@index([routineId])
+}
+
+// 루틴 수행 기록 모델
+model RoutineLog {
+  id            String         @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String
+  routineId     String         @db.ObjectId
+
+  performedAt   DateTime       @default(now())
+  reflection    String?
+  logImg        String
+  isPublic      Boolean        @default(true)
+  
+  // 관계 정의
+  user          User           @relation(fields: [userId], references: [id])
+  routine       Routine        @relation(fields: [routineId], references: [id])
+  comments      Comment[]      // 이 루틴 로그에 달린 댓글들
+  likes         Like[]         // 이 루틴 로그에 달린 좋아요들
+  bookmarks     Bookmark[]     // 북마크 목록
+  
+  @@index([userId])
+  @@index([routineId])
+  @@index([performedAt])
+}
+
+// 댓글 모델
+model Comment {
+  id            String         @id @default(auto()) @map("_id") @db.ObjectId
+  logId         String         @db.ObjectId
+  userId        String
+  content       String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  isDeleted     Boolean        @default(false)
+  
+  // 관계 정의
+  log           RoutineLog     @relation(fields: [logId], references: [id])
+  user          User           @relation(fields: [userId], references: [id])
+  
+  @@index([logId])
+  @@index([userId])
+}
+
+// 좋아요 모델
+model Like {
+  id            String         @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String
+  createdAt     DateTime       @default(now())
+
+  // 좋아요 대상 (루틴 로그)
+  routineLogId  String         @db.ObjectId
+  
+  // 관계 정의
+  user          User           @relation(fields: [userId], references: [id])
+  routineLog    RoutineLog     @relation(fields: [routineLogId], references: [id])
+  
+  @@unique([userId, routineLogId])
+  @@index([routineLogId])
+}
+
+// 북마크 모델
+model Bookmark {
+  id            String         @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String
+  routineLogId  String         @db.ObjectId
+  createdAt     DateTime       @default(now())
+  
+  // 관계 정의
+  user          User           @relation(fields: [userId], references: [id])
+  routineLog    RoutineLog     @relation(fields: [routineLogId], references: [id])
+  
+  // 한 사용자는 각 루틴을 한 번만 북마크할 수 있음
+  @@unique([userId, routineLogId])
+  @@index([routineLogId])
+}
+
+
+// 알림 모델 추가
+model Notification {
+  id            String         @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String
+  type          String         // 'like', 'comment', 'streak', 'achievement' 등
+  content       String
+  isRead        Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  
+  @@index([userId])
+  @@index([isRead])
+}
+
+
+// 루틴, 태그 지우고, 루틴은 내가 만들 수 있게.
